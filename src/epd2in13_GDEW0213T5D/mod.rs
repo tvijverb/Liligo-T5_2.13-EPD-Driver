@@ -59,8 +59,8 @@ use crate::traits::{InternalWiAdditions, QuickRefresh, RefreshLut, WaveshareDisp
 
 // For now, we use the internal LUT's in OTP memory
 // The Lookup Tables for the Display
-// mod constants;
-// use crate::epd2in13_GDEW0213T5D::constants::*;
+mod constants;
+use crate::epd2in13_GDEW0213T5D::constants::*;
 
 /// Width of the display.
 pub const WIDTH: u32 = 104;
@@ -133,26 +133,25 @@ where
         self.wait_until_idle();
 
         // set the panel settings
-        // self.cmd_with_data(spi, Command::PanelSetting, &[0x3F])?; // from registers
-        self.cmd_with_data(spi, Command::PanelSetting, &[0x1F])?; // LUT From OTP
+        self.cmd_with_data(spi, Command::PanelSetting, &[0x3F])?; // from registers
+        // self.cmd_with_data(spi, Command::PanelSetting, &[0x1F])?; // LUT From OTP
 
         // Set Frequency, 200 Hz didn't work on my board
         // 150Hz and 171Hz wasn't tested yet
         // TODO: Test these other frequencies
-        // 3A 100HZ   29 150Hz 39 200HZ  31 171HZ DEFAULT: 3c 50Hz
-        self.cmd_with_data(spi, Command::PllControl, &[0x3A])?;
+        // 0x3a -> 100Hz, 0x29 -> 150Hz, 0x39 -> 200Hz, 0x31 -> 171Hz, 0x3c -> 50Hz (default)
+        self.cmd_with_data(spi, Command::PllControl, &[0x3a])?;
 
-        // self.send_resolution(spi)?;
-        self.cmd_with_data(spi, Command::ResolutionSetting, &[0x68, 0x00, 0xd4])?; // 212x104 hard coded
+        self.send_resolution(spi)?;
 
-        // self.interface
-        //     .cmd_with_data(spi, Command::VcmDcSetting, &[0x12])?;
+        self.interface
+            .cmd_with_data(spi, Command::VcmDcSetting, &[0x12])?;
 
         //VBDF 17|D7 VBDW 97  VBDB 57  VBDF F7  VBDW 77  VBDB 37  VBDR B7
         self.interface
             .cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x97])?;
 
-        // self.set_lut(spi, None)?;
+        self.set_lut(spi, None)?;
 
         self.wait_until_idle();
         Ok(())
@@ -330,27 +329,26 @@ where
 
     fn set_lut(
         &mut self,
-        _spi: &mut SPI,
-        _refresh_rate: Option<RefreshLut>,
+        spi: &mut SPI,
+        refresh_rate: Option<RefreshLut>,
     ) -> Result<(), SPI::Error> {
-        unimplemented!("Custom LUT's not suported for epd2in13_GDEW0213T5D (yet)");
-        // if let Some(refresh_lut) = refresh_rate {
-        //     self.refresh = refresh_lut;
-        // }
-        // match self.refresh {
-        //     RefreshLut::Full => {
-        //         self.set_lut_helper(spi, &LUT_VCOM0, &LUT_WW, &LUT_BW, &LUT_WB, &LUT_BB)
-        //     }
+        if let Some(refresh_lut) = refresh_rate {
+            self.refresh = refresh_lut;
+        }
+        match self.refresh {
+            RefreshLut::Full => {
+                self.set_lut_helper(spi, &LUT_VCOM0, &LUT_WW, &LUT_BW, &LUT_WB, &LUT_BB)
+            }
 
-        //     RefreshLut::Quick => self.set_lut_helper(
-        //         spi,
-        //         &LUT_VCOM0_QUICK,
-        //         &LUT_WW_QUICK,
-        //         &LUT_BW_QUICK,
-        //         &LUT_WB_QUICK,
-        //         &LUT_BB_QUICK,
-        //     ),
-        // }
+            RefreshLut::Quick => self.set_lut_helper(
+                spi,
+                &LUT_VCOM0_QUICK,
+                &LUT_WW_QUICK,
+                &LUT_BW_QUICK,
+                &LUT_WB_QUICK,
+                &LUT_BB_QUICK,
+            ),
+        }
     }
 
     fn is_busy(&self) -> bool {
@@ -393,8 +391,7 @@ where
         let h = self.height();
 
         self.command(spi, Command::ResolutionSetting)?;
-        self.send_data(spi, &[(w >> 8) as u8])?;
-        self.send_data(spi, &[w as u8])?;
+        self.send_data(spi, &[w as u8 & 0xf8])?;
         self.send_data(spi, &[(h >> 8) as u8])?;
         self.send_data(spi, &[h as u8])
     }
