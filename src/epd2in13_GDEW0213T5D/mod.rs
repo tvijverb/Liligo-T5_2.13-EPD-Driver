@@ -134,7 +134,7 @@ where
 
         // set the panel settings
         self.cmd_with_data(spi, Command::PanelSetting, &[0x3F])?; // from registers
-        // self.cmd_with_data(spi, Command::PanelSetting, &[0x1F])?; // LUT From OTP
+                                                                  // self.cmd_with_data(spi, Command::PanelSetting, &[0x1F])?; // LUT From OTP
 
         // Set Frequency, 200 Hz didn't work on my board
         // 150Hz and 171Hz wasn't tested yet
@@ -183,7 +183,7 @@ where
         let mut epd = Epd2in13_T5D {
             interface,
             color,
-            refresh: RefreshLut::Full,
+            refresh: RefreshLut::Quick,
         };
 
         epd.init(spi, delay)?;
@@ -335,19 +335,11 @@ where
         if let Some(refresh_lut) = refresh_rate {
             self.refresh = refresh_lut;
         }
-        match self.refresh {
-            RefreshLut::Full => {
-                self.set_lut_helper(spi, &LUT_VCOM0, &LUT_WW, &LUT_BW, &LUT_WB, &LUT_BB)
-            }
 
-            RefreshLut::Quick => self.set_lut_helper(
-                spi,
-                &LUT_VCOM0_QUICK,
-                &LUT_WW_QUICK,
-                &LUT_BW_QUICK,
-                &LUT_WB_QUICK,
-                &LUT_BB_QUICK,
-            ),
+        match self.refresh {
+            RefreshLut::Full => self.set_lut_helper(spi, &constants::FULL_LUT),
+            RefreshLut::Quick => self.set_lut_helper(spi, &constants::DIRECT_LUT),
+            _ => self.set_lut_helper(spi, &constants::Uc8151Lut::default()),
         }
     }
 
@@ -396,30 +388,13 @@ where
         self.send_data(spi, &[h as u8])
     }
 
-    fn set_lut_helper(
-        &mut self,
-        spi: &mut SPI,
-        lut_vcom: &[u8],
-        lut_ww: &[u8],
-        lut_bw: &[u8],
-        lut_wb: &[u8],
-        lut_bb: &[u8],
-    ) -> Result<(), SPI::Error> {
+    fn set_lut_helper(&mut self, spi: &mut SPI, lut: &Uc8151Lut) -> Result<(), SPI::Error> {
         self.wait_until_idle();
-        // LUT VCOM
-        self.cmd_with_data(spi, Command::LutForVcom, lut_vcom)?;
-
-        // LUT WHITE to WHITE
-        self.cmd_with_data(spi, Command::LutWhiteToWhite, lut_ww)?;
-
-        // LUT BLACK to WHITE
-        self.cmd_with_data(spi, Command::LutBlackToWhite, lut_bw)?;
-
-        // LUT WHITE to BLACK
-        self.cmd_with_data(spi, Command::LutWhiteToBlack, lut_wb)?;
-
-        // LUT BLACK to BLACK
-        self.cmd_with_data(spi, Command::LutBlackToBlack, lut_bb)?;
+        self.cmd_with_data(spi, Command::LutForVcom, &lut.vcom0)?;
+        self.cmd_with_data(spi, Command::LutWhiteToWhite, &lut.ww)?;
+        self.cmd_with_data(spi, Command::LutBlackToWhite, &lut.bw)?;
+        self.cmd_with_data(spi, Command::LutWhiteToBlack, &lut.wb)?;
+        self.cmd_with_data(spi, Command::LutBlackToBlack, &lut.bb)?;
         Ok(())
     }
 
