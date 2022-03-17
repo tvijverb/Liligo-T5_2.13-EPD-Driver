@@ -32,7 +32,7 @@ pub const WIDTH: u32 = 122;
 /// Height of the display
 pub const HEIGHT: u32 = 250;
 /// Default Background Color
-pub const DEFAULT_BACKGROUND_COLOR: Color = Color::Black;
+pub const DEFAULT_BACKGROUND_COLOR: Color = Color::White;
 const IS_BUSY_LOW: bool = false;
 
 /// Good Display GDEY0213B74 (same as GDEQ0213B74) driver
@@ -67,11 +67,7 @@ where
 
             self.set_lut(spi, Some(self.refresh_mode))?;
 
-            // Python code does this, not sure why
-            // self.cmd_with_data(spi, Command::WriteOtpSelection, &[0, 0, 0, 0, 0x40, 0, 0])?;
-
-            // During partial update, clock/analog are not disabled between 2
-            // updates.
+            // During partial update, clock/analog are not disabled between 2 updates.
             self.set_display_update_control_2(spi, DisplayUpdateControl2::new().enable_analog().enable_clock())?;
             self.command(spi, Command::MasterActivation)?;
             self.wait_until_idle();
@@ -100,14 +96,12 @@ where
                 },
             )?;
 
-            // // These 2 are the reset values
-            // self.set_dummy_line_period(spi, 0x30)?;
-            self.set_gate_scan_start_position(spi, 0)?;
-
             // Use simple X/Y auto increase
             self.set_data_entry_mode(spi, DataEntryModeIncr::XIncrYIncr, DataEntryModeDir::XDir)?;
             self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1)?;
             self.set_ram_address_counters(spi, 0, 0)?;
+
+            self.set_lut(spi, Some(self.refresh_mode))?;
 
             self.set_border_waveform(
                 spi,
@@ -120,12 +114,8 @@ where
             self.cmd_with_data(spi, Command::BorderWaveformControl, &[5])?;
 
             // newly added:
-            // Inverse BW-RAM (why?)
-            self.cmd_with_data(spi, Command::DisplayUpdateControl1, &[0, 0x80])?; 
-            // Use built-in temp sensor
-            self.cmd_with_data(spi, Command::TemperatureSensorControl, &[0, 0x80])?;
-
-            // removed these..
+            self.cmd_with_data(spi, Command::DisplayUpdateControl1, &[0, 0x80])?; // inverted: &[0x88, 0x80])?;
+            self.cmd_with_data(spi, Command::TemperatureSensorControl, &[0, 0x80])?; // Use built-in temp sensor
 
             self.set_vcom_register(spi, (-21).vcom())?;
 
@@ -137,8 +127,7 @@ where
             //     (-150).source_driving_decivolt(),
             // )?;
 
-            // self.set_gate_line_width(spi, 10)?;
-            // self.set_lut(spi, Some(self.refresh))?;
+            self.set_lut(spi, Some(RefreshLut::Quick))?;
         }
 
         self.wait_until_idle();
@@ -193,8 +182,6 @@ where
         assert!(buffer.len() == buffer_len(WIDTH as usize, HEIGHT as usize));
 
         self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1)?;
-        // self.cmd_with_data(spi, Command::SetRamXAddressStartEndPosition, &[0, 0xf])?;
-        // self.cmd_with_data(spi, Command::SetRamYAddressStartEndPosition, &[0xf9, 0, 0, 0])?;
 
         self.set_ram_address_counters(spi, 0, 0)?;
 
@@ -230,20 +217,20 @@ where
         // RAM content). Using this function will most probably make the actual
         // display incorrect as the controler will compare with something
         // incorrect.
-        assert!(self.refresh_mode == RefreshLut::Full);
+        // assert!(self.refresh_mode == RefreshLut::Full);
 
         self.set_ram_area(spi, x, y, x + width, y + height)?;
         self.set_ram_address_counters(spi, x, y)?;
 
         self.cmd_with_data(spi, Command::WriteRam, buffer)?;
 
-        if self.refresh_mode == RefreshLut::Full {
-            // Always keep the base buffer equals to current if not doing partial refresh.
-            self.set_ram_area(spi, x, y, x + width, y + height)?;
-            self.set_ram_address_counters(spi, x, y)?;
+        // if self.refresh_mode == RefreshLut::Full {
+        //     // Always keep the base buffer equals to current if not doing partial refresh.
+        //     self.set_ram_area(spi, x, y, x + width, y + height)?;
+        //     self.set_ram_address_counters(spi, x, y)?;
 
-            self.cmd_with_data(spi, Command::WriteRamRed, buffer)?;
-        }
+        //     self.cmd_with_data(spi, Command::WriteRamRed, buffer)?;
+        // }
 
         Ok(())
     }
@@ -254,6 +241,7 @@ where
         if self.refresh_mode == RefreshLut::Full {
             let du_ctrl_value = DisplayUpdateControl2::new()
                 .load_temp()
+                .load_lut()
                 .enable_clock()
                 .enable_analog()
                 .display()
@@ -261,8 +249,13 @@ where
                 .disable_clock();
 
             defmt::info!("display_frame()  with RefreshLut::Full {:x}", du_ctrl_value.as_u8());
-            // self.set_display_update_control_2(spi, du_ctrl_value)?;
-            self.cmd_with_data(spi, Command::DisplayUpdateControl2, &[0xf7])?;
+
+            // if partial {
+            //     self.set_display_update_control_2(spi, du_ctrl_value.display_mode2())?;
+            // } else {
+                self.set_display_update_control_2(spi, du_ctrl_value)?;
+            // }
+            // self.cmd_with_data(spi, Command::DisplayUpdateControl2, &[0xf7])?; // display mode 2
         } else {
             self.set_display_update_control_2(spi, DisplayUpdateControl2::new().display())?;
         }
@@ -271,6 +264,14 @@ where
 
         Ok(())
     }
+
+    // fn display_frame(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
+    //     self.ddisplay_frame(spi, false)
+    // }
+
+    // fn display_partial_frame(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
+    //     self.ddisplay_frame(spi, true)
+    // }
 
     fn update_and_display_frame(&mut self, spi: &mut SPI, buffer: &[u8], delay: &mut DELAY) -> Result<(), SPI::Error> {
         self.update_frame(spi, buffer, delay)?;
@@ -321,12 +322,17 @@ where
     }
 
     fn set_lut(&mut self, spi: &mut SPI, refresh_rate: Option<RefreshLut>) -> Result<(), SPI::Error> {
-        let buffer = match refresh_rate {
-            Some(RefreshLut::Full) | None => &LUT_FULL_UPDATE,
-            Some(RefreshLut::Quick) => &LUT_PARTIAL_UPDATE,
-        };
+        defmt::warn!("Not implemented for SSD1680");
+        // let buffer = match refresh_rate {
+        //     Some(RefreshLut::Full) | None => &LUT_FULL_UPDATE,
+        //     Some(RefreshLut::Quick) => &LUT_PARTIAL_UPDATE,
+        //     // Some(RefreshLut::Full) | None => &constants::LUT_PARTIAL_UPDATEZZ,
+        //     // Some(RefreshLut::Quick) => &constants::LUT_PARTIAL_UPDATEZZ,
+        // };
 
-        self.cmd_with_data(spi, Command::WriteLutRegister, buffer)
+        // self.cmd_with_data(spi, Command::WriteLutRegister, buffer);
+
+        Ok(())
     }
 
     fn is_busy(&self) -> bool {

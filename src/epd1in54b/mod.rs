@@ -5,7 +5,7 @@ use embedded_hal::{
     digital::v2::*,
 };
 
-use crate::interface::DisplayInterface;
+use crate::{interface::DisplayInterface, prelude::TriColor};
 use crate::traits::{
     InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay,
 };
@@ -19,10 +19,13 @@ pub const WIDTH: u32 = 200;
 /// Height of epd1in54 in pixels
 pub const HEIGHT: u32 = 200;
 /// Default Background Color (white)
-pub const DEFAULT_BACKGROUND_COLOR: Color = Color::White;
+pub const DEFAULT_BACKGROUND_COLOR: TriColor = TriColor::White;
+
+const NUM_DISPLAY_BITS: u32 = WIDTH * HEIGHT / 8;
+
 const IS_BUSY_LOW: bool = true;
 
-use crate::color::Color;
+use crate::color::TriColor as Color;
 
 pub(crate) mod command;
 use self::command::Command;
@@ -49,37 +52,50 @@ where
     DELAY: DelayMs<u8>,
 {
     fn init(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+        defmt::info!("EPD1in54b reset");
         self.interface.reset(delay, 10);
-
+        
+        defmt::info!("EPD1in54b set power");
         // set the power settings
         self.interface
-            .cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x00, 0x08, 0x00])?;
-
+        .cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x00, 0x08, 0x00])?;
+        
+        defmt::info!("EPD1in54b start booster");
         // start the booster
         self.interface
-            .cmd_with_data(spi, Command::BoosterSoftStart, &[0x07, 0x07, 0x07])?;
-
+        .cmd_with_data(spi, Command::BoosterSoftStart, &[0x07, 0x07, 0x07])?;
+        
+        defmt::info!("EPD1in54b pwron");
         // power on
         self.command(spi, Command::PowerOn)?;
+        // delay.delay_ms(250);
+        // delay.delay_ms(250);
         delay.delay_ms(5);
         self.wait_until_idle();
-
+        
+        defmt::info!("EPD1in54b setup panel");
         // set the panel settings
         self.cmd_with_data(spi, Command::PanelSetting, &[0xCF])?;
-
+        
         self.cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x37])?;
-
+        
+        defmt::info!("EPD1in54b PLL");
         // PLL
         self.cmd_with_data(spi, Command::PllControl, &[0x39])?;
-
+        
+        defmt::info!("EPD1in54b Set res");
         // set resolution
         self.send_resolution(spi)?;
-
+        
         self.cmd_with_data(spi, Command::VcmDcSetting, &[0x0E])?;
-
+        
+        defmt::info!("EPD1in54b Set LUT");
         self.set_lut(spi, None)?;
-
+        
+        defmt::info!("EPD1in54b wait till idle");
         self.wait_until_idle();
+        // delay.delay_ms(250);
+        // delay.delay_ms(250);
 
         Ok(())
     }
@@ -129,15 +145,15 @@ where
     }
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> WaveshareDisplay<SPI, CS, BUSY, DC, RST, DELAY>
-    for Epd1in54b<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, CS, BUSY, DC, RST, DLY> WaveshareDisplay<SPI, CS, BUSY, DC, RST, DLY>
+    for Epd1in54b<SPI, CS, BUSY, DC, RST, DLY>
 where
     SPI: Write<u8>,
     CS: OutputPin,
     BUSY: InputPin,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayMs<u8>,
+    DLY: DelayMs<u8>,
 {
     type DisplayColor = Color;
     fn new(
@@ -146,7 +162,7 @@ where
         busy: BUSY,
         dc: DC,
         rst: RST,
-        delay: &mut DELAY,
+        delay: &mut DLY,
     ) -> Result<Self, SPI::Error> {
         let interface = DisplayInterface::new(cs, busy, dc, rst);
         let color = DEFAULT_BACKGROUND_COLOR;
@@ -158,7 +174,7 @@ where
         Ok(epd)
     }
 
-    fn sleep(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
+    fn sleep(&mut self, spi: &mut SPI, _delay: &mut DLY) -> Result<(), SPI::Error> {
         self.wait_until_idle();
         self.interface
             .cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x17])?; //border floating
@@ -178,7 +194,7 @@ where
         Ok(())
     }
 
-    fn wake_up(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
+    fn wake_up(&mut self, spi: &mut SPI, delay: &mut DLY) -> Result<(), SPI::Error> {
         self.init(spi, delay)
     }
 
@@ -202,7 +218,7 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-        _delay: &mut DELAY,
+        _delay: &mut DLY,
     ) -> Result<(), SPI::Error> {
         self.wait_until_idle();
         self.send_resolution(spi)?;
@@ -241,7 +257,7 @@ where
         unimplemented!()
     }
 
-    fn display_frame(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
+    fn display_frame(&mut self, spi: &mut SPI, _delay: &mut DLY) -> Result<(), SPI::Error> {
         self.wait_until_idle();
         self.command(spi, Command::DisplayRefresh)?;
         Ok(())
@@ -251,14 +267,14 @@ where
         &mut self,
         spi: &mut SPI,
         buffer: &[u8],
-        delay: &mut DELAY,
+        delay: &mut DLY,
     ) -> Result<(), SPI::Error> {
         self.update_frame(spi, buffer, delay)?;
         self.display_frame(spi, delay)?;
         Ok(())
     }
 
-    fn clear_frame(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
+    fn clear_frame(&mut self, spi: &mut SPI, _delay: &mut DLY) -> Result<(), SPI::Error> {
         self.wait_until_idle();
         self.send_resolution(spi)?;
 

@@ -37,7 +37,7 @@ pub(crate) enum Command {
     WriteRam = 0x24,
     WriteRamRed = 0x26,
     ReadRam = 0x27,
-    
+
     VcomSense = 0x28,
     VcomSenseDuration = 0x29,
     ProgramVcomOTP = 0x2A,
@@ -127,6 +127,11 @@ impl DisplayUpdateControl2 {
 
     pub fn display(mut self) -> Self {
         self.0.set_bit(2, true);
+        self
+    }
+    
+    pub fn display_mode2(mut self) -> Self {
+        self.0.set_bit(3, true);
         self
     }
 

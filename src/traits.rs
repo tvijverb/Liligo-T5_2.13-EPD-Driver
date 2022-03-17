@@ -13,10 +13,12 @@ pub(crate) trait Command {
 /// Seperates the different LUT for the Display Refresh process
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum RefreshLut {
+    // OTP,
     /// The "normal" full Lookuptable for the Refresh-Sequence
     Full,
-    /// The quick LUT where not the full refresh sequence is followed.
+    /// The direct LUT where not the full refresh sequence is followed.
     /// This might lead to some
+    // Direct,
     Quick,
 }
 
@@ -225,7 +227,7 @@ where
     fn set_lut(
         &mut self,
         spi: &mut SPI,
-        refresh_rate: Option<RefreshLut>,
+        refresh_mode: Option<RefreshLut>,
     ) -> Result<(), SPI::Error>;
 
     /// Checks if the display is busy transmitting data

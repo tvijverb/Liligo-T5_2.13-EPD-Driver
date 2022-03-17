@@ -120,7 +120,8 @@ where
         self.interface.cmd_with_data(
             spi,
             Command::PowerSetting,
-            &[0x03, 0x00, 0x2b, 0x2b, 0xff],
+            // &[0x03, 0x00, 0x2b, 0x2b, 0xff],
+            &[0x03, 0x00, 0x2b, 0x2b, 0x03],
         )?;
 
         // start the booster

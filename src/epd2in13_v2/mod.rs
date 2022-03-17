@@ -171,7 +171,7 @@ where
     ) -> Result<Self, SPI::Error> {
         let mut epd = Epd2in13 {
             interface: DisplayInterface::new(cs, busy, dc, rst),
-            sleep_mode: DeepSleepMode::Mode1,
+            sleep_mode: DeepSleepMode::Normal,
             background_color: DEFAULT_BACKGROUND_COLOR,
             refresh: RefreshLut::Full,
         };
