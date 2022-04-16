@@ -322,7 +322,7 @@ where
     }
 
     fn set_lut(&mut self, spi: &mut SPI, refresh_rate: Option<RefreshLut>) -> Result<(), SPI::Error> {
-        defmt::warn!("Not implemented for SSD1680");
+        defmt::debug!("set_lut() not implemented for SSD1680");
         // let buffer = match refresh_rate {
         //     Some(RefreshLut::Full) | None => &LUT_FULL_UPDATE,
         //     Some(RefreshLut::Quick) => &LUT_PARTIAL_UPDATE,
