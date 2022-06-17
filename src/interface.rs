@@ -42,6 +42,10 @@ where
         }
     }
 
+    pub fn deinit(self) -> (CS, BUSY, DC, RST) {
+        (self.cs, self.busy, self.dc, self.rst)
+    }
+
     /// Basic function for sending [Commands](Command).
     ///
     /// Enables direct interaction with the device with the help of [data()](DisplayInterface::data())

@@ -5,10 +5,10 @@ use embedded_hal::{
     digital::v2::*,
 };
 
-use crate::{interface::DisplayInterface, prelude::TriColor};
 use crate::traits::{
     InternalWiAdditions, RefreshLut, WaveshareDisplay, WaveshareThreeColorDisplay,
 };
+use crate::{interface::DisplayInterface, prelude::TriColor};
 
 //The Lookup Tables for the Display
 mod constants;
@@ -41,6 +41,22 @@ pub struct Epd1in54b<SPI, CS, BUSY, DC, RST, DELAY> {
     color: Color,
 }
 
+impl<SPI, CS, BUSY, DC, RST, DELAY> Epd1in54b<SPI, CS, BUSY, DC, RST, DELAY>
+where
+    SPI: Write<u8>,
+    CS: OutputPin,
+    BUSY: InputPin,
+    DC: OutputPin,
+    RST: OutputPin,
+    DELAY: DelayMs<u8>,
+{
+    /// Go in lowest power mode, deinit SPI peripheral
+    /// put GPIO lines in hi impedance mode
+    pub fn deinit(self) -> (CS, BUSY, DC, RST) {
+        self.interface.deinit()
+    }
+}
+
 impl<SPI, CS, BUSY, DC, RST, DELAY> InternalWiAdditions<SPI, CS, BUSY, DC, RST, DELAY>
     for Epd1in54b<SPI, CS, BUSY, DC, RST, DELAY>
 where
@@ -54,17 +70,17 @@ where
     fn init(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
         defmt::info!("EPD1in54b reset");
         self.interface.reset(delay, 10);
-        
+
         defmt::info!("EPD1in54b set power");
         // set the power settings
         self.interface
-        .cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x00, 0x08, 0x00])?;
-        
+            .cmd_with_data(spi, Command::PowerSetting, &[0x07, 0x00, 0x08, 0x00])?;
+
         defmt::info!("EPD1in54b start booster");
         // start the booster
         self.interface
-        .cmd_with_data(spi, Command::BoosterSoftStart, &[0x07, 0x07, 0x07])?;
-        
+            .cmd_with_data(spi, Command::BoosterSoftStart, &[0x07, 0x07, 0x07])?;
+
         defmt::info!("EPD1in54b pwron");
         // power on
         self.command(spi, Command::PowerOn)?;
@@ -72,26 +88,26 @@ where
         // delay.delay_ms(250);
         delay.delay_ms(5);
         self.wait_until_idle();
-        
+
         defmt::info!("EPD1in54b setup panel");
         // set the panel settings
         self.cmd_with_data(spi, Command::PanelSetting, &[0xCF])?;
-        
+
         self.cmd_with_data(spi, Command::VcomAndDataIntervalSetting, &[0x37])?;
-        
+
         defmt::info!("EPD1in54b PLL");
         // PLL
         self.cmd_with_data(spi, Command::PllControl, &[0x39])?;
-        
+
         defmt::info!("EPD1in54b Set res");
         // set resolution
         self.send_resolution(spi)?;
-        
+
         self.cmd_with_data(spi, Command::VcmDcSetting, &[0x0E])?;
-        
+
         defmt::info!("EPD1in54b Set LUT");
         self.set_lut(spi, None)?;
-        
+
         defmt::info!("EPD1in54b wait till idle");
         self.wait_until_idle();
         // delay.delay_ms(250);
@@ -278,7 +294,7 @@ where
         self.wait_until_idle();
         self.send_resolution(spi)?;
 
-        let color = DEFAULT_BACKGROUND_COLOR.get_byte_value();
+        let color = self.color.get_byte_value();
 
         // Clear the black
         self.interface.cmd(spi, Command::DataStartTransmission1)?;
