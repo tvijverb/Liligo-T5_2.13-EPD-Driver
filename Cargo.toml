@@ -27,11 +27,8 @@ embedded-graphics = "0.7.1"
 linux-embedded-hal = "0.3"
 embedded-hal-mock = "0.8"
 
-
-
 [features]
 default = ["graphics"]
-
 graphics = ["embedded-graphics-core"]
 
 # Offers an alternative fast full lut for type_a displays, but the refreshed screen isnt as clean looking

@@ -35,7 +35,7 @@ pub const HEIGHT: u32 = 250;
 pub const DEFAULT_BACKGROUND_COLOR: Color = Color::White;
 const IS_BUSY_LOW: bool = false;
 
-/// Good Display GDEY0213B74 (same as GDEQ0213B74) driver
+/// Good Display 'B74' (e.g. GDEY0213B74, GDEQ0213B74) driver
 ///
 pub struct B74Epd<SPI, CS, BUSY, DC, RST, DELAY> {
     /// Connection Interface
@@ -59,9 +59,32 @@ where
 {
     fn init(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
         // HW reset
-        self.interface.reset(delay, 10);
+        self.interface.reset(delay, 50);
+        self.wait_until_idle();
+        self.command(spi, Command::SwReset);
+        self.wait_until_idle();
 
-        if self.refresh_mode == RefreshLut::Quick {
+        // Use init routine from manufacturer's reference implementation
+        let use_reference_init = false;
+        let invert_display = false; // not available in reference-init
+
+        if use_reference_init {
+            self.cmd_with_data(spi, Command::DriverOutputControl, &[0xf9, 0, 0]);
+
+            self.set_data_entry_mode(spi, DataEntryModeIncr::XIncrYIncr, DataEntryModeDir::XDir)?;
+            self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1)?;
+            self.set_ram_address_counters(spi, 0, 0)?;
+
+            self.cmd_with_data(spi, Command::SetRamXAddressStartEndPosition, &[0, 0x0F]);
+            self.cmd_with_data(spi, Command::SetRamYAddressStartEndPosition, &[0xf9, 0, 0, 0]);
+            self.cmd_with_data(spi, Command::SetRamXAddressCounter, &[0x00]);
+            self.cmd_with_data(spi, Command::SetRamYAddressCounter, &[0xf9, 0x00]);
+
+            self.cmd_with_data(spi, Command::BorderWaveformControl, &[0x05]);
+            self.cmd_with_data(spi, Command::DisplayUpdateControl1, &[0x0, 0x80]);
+            self.cmd_with_data(spi, Command::TemperatureSensorControl, &[0x80]);
+        } else if self.refresh_mode == RefreshLut::Quick {
+            panic!("Dont support: .refresh_mode == RefreshLut::Quick ");
             self.set_vcom_register(spi, (-9).vcom())?;
             self.wait_until_idle();
 
@@ -81,11 +104,6 @@ where
                 },
             )?;
         } else {
-            self.wait_until_idle();
-            self.command(spi, Command::SwReset)?;
-            self.wait_until_idle();
-
-            self.cmd_with_data(spi, Command::DriverOutputControl, &[0xF9, 0, 0])?;
             self.set_driver_output(
                 spi,
                 DriverOutput {
@@ -103,22 +121,33 @@ where
 
             self.set_lut(spi, Some(self.refresh_mode))?;
 
-            self.set_border_waveform(
-                spi,
-                BorderWaveForm {
-                    vbd: BorderWaveFormVbd::Gs,
-                    fix_level: BorderWaveFormFixLevel::Vss,
-                    gs_trans: BorderWaveFormGs::Lut3,
-                },
-            )?;
-            self.cmd_with_data(spi, Command::BorderWaveformControl, &[5])?;
+            if invert_display {
+                self.set_border_waveform(
+                    spi,
+                    BorderWaveForm {
+                        vbd: BorderWaveFormVbd::Gs,
+                        fix_level: BorderWaveFormFixLevel::Vss,
+                        gs_trans: BorderWaveFormGs::Lut0,
+                    },
+                )?;
 
-            // newly added:
-            self.cmd_with_data(spi, Command::DisplayUpdateControl1, &[0, 0x80])?; // inverted: &[0x88, 0x80])?;
-            self.cmd_with_data(spi, Command::TemperatureSensorControl, &[0, 0x80])?; // Use built-in temp sensor
+                self.cmd_with_data(spi, Command::DisplayUpdateControl1, &[0x88, 0x80])?;
+            } else {
+                self.set_border_waveform(
+                    spi,
+                    BorderWaveForm {
+                        vbd: BorderWaveFormVbd::Gs,
+                        fix_level: BorderWaveFormFixLevel::Vss,
+                        gs_trans: BorderWaveFormGs::Lut3,
+                    },
+                )?;
 
-            self.set_vcom_register(spi, (-21).vcom())?;
+                self.cmd_with_data(spi, Command::DisplayUpdateControl1, &[0, 0x80])?;
+            }
 
+            self.cmd_with_data(spi, Command::TemperatureSensorControl, &[0x80]);
+
+            // self.set_vcom_register(spi, (-21).vcom())?;
             // self.set_gate_driving_voltage(spi, 190.gate_driving_decivolt())?;
             // self.set_source_driving_voltage(
             //     spi,
@@ -127,7 +156,7 @@ where
             //     (-150).source_driving_decivolt(),
             // )?;
 
-            self.set_lut(spi, Some(RefreshLut::Quick))?;
+            // self.set_lut(spi, Some(RefreshLut::Quick))?;
         }
 
         self.wait_until_idle();
@@ -182,7 +211,6 @@ where
         assert!(buffer.len() == buffer_len(WIDTH as usize, HEIGHT as usize));
 
         self.set_ram_area(spi, 0, 0, WIDTH - 1, HEIGHT - 1)?;
-
         self.set_ram_address_counters(spi, 0, 0)?;
 
         self.cmd_with_data(spi, Command::WriteRam, buffer)?;
@@ -253,25 +281,18 @@ where
             // if partial {
             //     self.set_display_update_control_2(spi, du_ctrl_value.display_mode2())?;
             // } else {
-                self.set_display_update_control_2(spi, du_ctrl_value)?;
+            self.set_display_update_control_2(spi, du_ctrl_value)?;
             // }
             // self.cmd_with_data(spi, Command::DisplayUpdateControl2, &[0xf7])?; // display mode 2
         } else {
             self.set_display_update_control_2(spi, DisplayUpdateControl2::new().display())?;
         }
+
         self.command(spi, Command::MasterActivation)?;
         self.wait_until_idle();
 
         Ok(())
     }
-
-    // fn display_frame(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
-    //     self.ddisplay_frame(spi, false)
-    // }
-
-    // fn display_partial_frame(&mut self, spi: &mut SPI, _delay: &mut DELAY) -> Result<(), SPI::Error> {
-    //     self.ddisplay_frame(spi, true)
-    // }
 
     fn update_and_display_frame(&mut self, spi: &mut SPI, buffer: &[u8], delay: &mut DELAY) -> Result<(), SPI::Error> {
         self.update_frame(spi, buffer, delay)?;
@@ -378,7 +399,11 @@ where
     fn set_gate_scan_start_position(&mut self, spi: &mut SPI, start: u16) -> Result<(), SPI::Error> {
         defmt::debug!("scan start position {}", start);
         assert!(start <= 295);
-        self.cmd_with_data(spi, Command::GateScanStartPosition, &[(start & 0xFF) as u8, ((start >> 8) & 0x1) as u8])
+        self.cmd_with_data(
+            spi,
+            Command::GateScanStartPosition,
+            &[(start & 0xFF) as u8, ((start >> 8) & 0x1) as u8],
+        )
     }
 
     fn set_border_waveform(&mut self, spi: &mut SPI, borderwaveform: BorderWaveForm) -> Result<(), SPI::Error> {
