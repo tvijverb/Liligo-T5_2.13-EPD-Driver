@@ -89,7 +89,7 @@ pub mod epd7in5_hd;
 pub mod epd7in5_v2;
 
 pub mod epd2in13_GDEW0213T5D;
-pub mod gd_0213_b74;
+pub mod epd2in13_GDEQ0213B74;
 
 pub(crate) mod type_a;
 
