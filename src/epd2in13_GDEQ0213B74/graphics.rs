@@ -1,5 +1,5 @@
 use crate::buffer_len;
-use crate::gd_0213_b74::{DEFAULT_BACKGROUND_COLOR, HEIGHT, WIDTH};
+use crate::epd2in13_GDEQ0213B74::{DEFAULT_BACKGROUND_COLOR, HEIGHT, WIDTH};
 use crate::graphics::{Display, DisplayRotation};
 use embedded_graphics_core::pixelcolor::BinaryColor;
 use embedded_graphics_core::prelude::*;
