@@ -37,7 +37,7 @@ const IS_BUSY_LOW: bool = false;
 
 /// Good Display 'B74' (e.g. GDEY0213B74, GDEQ0213B74) driver
 ///
-pub struct B74Epd<SPI, CS, BUSY, DC, RST, DELAY> {
+pub struct Epd2in13<SPI, CS, BUSY, DC, RST, DELAY> {
     /// Connection Interface
     interface: DisplayInterface<SPI, CS, BUSY, DC, RST, DELAY>,
 
@@ -48,7 +48,7 @@ pub struct B74Epd<SPI, CS, BUSY, DC, RST, DELAY> {
     refresh_mode: RefreshLut,
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> InternalWiAdditions<SPI, CS, BUSY, DC, RST, DELAY> for B74Epd<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, CS, BUSY, DC, RST, DELAY> InternalWiAdditions<SPI, CS, BUSY, DC, RST, DELAY> for Epd2in13<SPI, CS, BUSY, DC, RST, DELAY>
 where
     SPI: Write<u8>,
     CS: OutputPin,
@@ -164,7 +164,7 @@ where
     }
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> WaveshareDisplay<SPI, CS, BUSY, DC, RST, DELAY> for B74Epd<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, CS, BUSY, DC, RST, DELAY> WaveshareDisplay<SPI, CS, BUSY, DC, RST, DELAY> for Epd2in13<SPI, CS, BUSY, DC, RST, DELAY>
 where
     SPI: Write<u8>,
     CS: OutputPin,
@@ -175,7 +175,7 @@ where
 {
     type DisplayColor = Color;
     fn new(spi: &mut SPI, cs: CS, busy: BUSY, dc: DC, rst: RST, delay: &mut DELAY) -> Result<Self, SPI::Error> {
-        let mut epd = B74Epd {
+        let mut epd = Epd2in13 {
             interface: DisplayInterface::new(cs, busy, dc, rst),
             sleep_mode: DeepSleepMode::Mode1,
             background_color: DEFAULT_BACKGROUND_COLOR,
@@ -361,7 +361,7 @@ where
     }
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> B74Epd<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, CS, BUSY, DC, RST, DELAY> Epd2in13<SPI, CS, BUSY, DC, RST, DELAY>
 where
     SPI: Write<u8>,
     CS: OutputPin,
